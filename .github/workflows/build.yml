@@ -1,0 +1,56 @@
+name: build
+on:
+  push:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - name: android sdk + ndk
+        run: |
+          yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --licenses >/dev/null || true
+          $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager "platforms;android-33" "build-tools;33.0.2" "ndk;26.1.10909125"
+
+      - name: build ox_core (arm64)
+        run: |
+          cd ox_esp
+          NDK=$ANDROID_HOME/ndk/26.1.10909125
+          $NDK/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android26-clang++ \
+            -std=c++20 -O2 -fPIC -Isrc -o ox_core \
+            src/ox_main.cpp src/ox_game.cpp src/il2cpp.cpp src/mem.cpp src/code.cpp src/local_mem.cpp
+
+      - name: build ox_dumper (arm64)
+        run: |
+          cd ox_esp
+          NDK=$ANDROID_HOME/ndk/26.1.10909125
+          $NDK/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android26-clang++ \
+            -std=c++20 -O2 -fPIC -Isrc -o ox_dumper \
+            src/ox_dumper.cpp src/mem.cpp
+
+      - name: build apk
+        run: |
+          cd ox_esp
+          sh build_apk.sh
+
+      - name: build dumper apk
+        run: |
+          cd ox_esp
+          sh build_dumper_apk.sh
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ox_esp_apk
+          path: ox_esp/ox_esp.apk
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ox_dumper_apk
+          path: ox_esp/ox_dumper.apk
